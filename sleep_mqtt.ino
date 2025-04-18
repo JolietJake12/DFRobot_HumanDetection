@@ -23,14 +23,14 @@
 #include <PubSubClient.h>
 
 // WiFi credentials
-const char* ssid = "Menominee";
-const char* password = "please202";
+const char* ssid = "*******";
+const char* password = "*******";
 
 // MQTT Broker settings
-const char* mqtt_server = "10.0.0.200";
+const char* mqtt_server = "******";
 const int mqtt_port = 1883;
-const char* mqtt_user = "mqtt-user";  // if authentication is required
-const char* mqtt_password = "buzz";  // if authentication is required
+const char* mqtt_user = "*******";  // if authentication is required
+const char* mqtt_password = "*****";  // if authentication is required
 const char* client_id = "ESP32_SleepSensor";  // MQTT client ID
 const char* topic_base = "sleepsensor/";  // Base topic for publishing
 
