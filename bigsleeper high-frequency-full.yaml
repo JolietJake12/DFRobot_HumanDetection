@@ -1,0 +1,256 @@
+#High-frequency configuration with FULL sleep diagnostics
+esphome:
+  name: "bigsleeper"
+  friendly_name: Big Sleeper HF Full
+  min_version: 2024.11.0
+  name_add_mac_suffix: false
+
+  # Configuration specific to the watchdog and memory challenges
+  platformio_options:
+    build_flags:
+      - "-DARDUINO_EVENT_RUNNING_CORE=1"    # Run Arduino core on first CPU core
+      - "-DARDUINO_RUNNING_CORE=1"          # Run loop on first CPU core
+      - "-DCONFIG_ARDUINO_RUNNING_CORE=1"   # Additional core setting
+
+# Load our external component
+external_components:
+  - source:
+      type: local
+      path: components
+
+# Enable detailed logging
+logger:
+  logs:
+    c1001: INFO
+    uart: INFO
+    wifi: INFO
+    component: INFO
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret esphome_encryption_key
+  reboot_timeout: 3600s  # More tolerant of API disconnects
+
+# Allow Over-The-Air updates
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  # Enable AP if WiFi connection fails
+  ap:
+    ssid: "Sleeper Fallback AP"
+    password: "sleepersensor"
+  # Add WiFi power saving disable and better connection handling
+  power_save_mode: none
+  fast_connect: true
+  # Add reconnect logic
+  reboot_timeout: 900s  # Reboot if WiFi is disconnected for 15 minutes
+
+# Setup the UART connection for C1001 sensor
+uart:
+  id: uart_bus
+  tx_pin: GPIO17  # Common TX pin on ESP-WROOM-32 DevKit
+  rx_pin: GPIO16  # Common RX pin on ESP-WROOM-32 DevKit
+  baud_rate: 115200
+  # Add buffer size and hardware parameters
+  rx_buffer_size: 1024
+  stop_bits: 1
+  data_bits: 8
+  parity: NONE
+  debug:
+
+esp32:
+  board: esp32dev  # Standard ESP-WROOM-32 DevKit board
+  framework:
+    type: arduino
+  # Use both cores for better performance
+  variant: esp32
+
+# C1001 component with fast update rate
+c1001:
+  id: c1001_component
+  uart_id: uart_bus
+  update_interval: 1s   # Faster updates for vital signs
+  setup_priority: -10   # Higher priority for setup
+
+# Basic sensors
+sensor:
+  - platform: internal_temperature
+    name: "Internal Temperature"
+    id: internal_temp
+    update_interval: 60s
+
+  - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+
+  - platform: uptime # Tracks how long the device has been running
+    name: "Sleeper Uptime"
+    update_interval: 60s
+
+  - platform: template # Simple counter to monitor if updates continue
+    name: "Sleeper Heartbeat"
+    lambda: "static int counter = 0; return counter++;"
+    update_interval: 60s
+
+  - platform: c1001
+    c1001_id: c1001_component
+    
+    # High-priority vital signs
+    respiration_rate:
+      name: "Respiration Rate"
+      id: respiration_rate
+      accuracy_decimals: 1
+      state_class: measurement
+      unit_of_measurement: "BPM"
+      icon: mdi:lungs
+      
+    heart_rate:
+      name: "Heart Rate"
+      id: heart_rate
+      accuracy_decimals: 1
+      state_class: measurement
+      unit_of_measurement: "BPM"
+      icon: mdi:heart-pulse
+      
+    # Basic monitoring
+    presence:
+      name: "Human Presence Raw"
+      id: human_presence
+      icon: mdi:human-greeting
+      
+    movement:
+      name: "Movement Status"
+      id: movement_status
+      icon: mdi:motion-sensor
+      
+    # Sleep state and quality
+    in_bed:
+      name: "In Bed"
+      id: in_bed
+      icon: mdi:bed
+    sleep_state:
+      name: "Sleep State"
+      id: sleep_state
+      icon: mdi:sleep
+    sleep_quality:
+      name: "Sleep Quality Score"
+      id: sleep_quality
+      icon: mdi:star
+    sleep_quality_rating:
+      name: "Sleep Quality Rating"
+      id: sleep_quality_rating
+      icon: mdi:star-half-full
+
+    # Sleep durations
+    awake_duration:
+      name: "Awake Duration"
+      id: awake_duration
+      unit_of_measurement: "min"
+      icon: mdi:sleep-off
+    light_sleep_duration:
+      name: "Light Sleep Duration"
+      id: light_sleep_duration
+      unit_of_measurement: "min"
+      icon: mdi:sleep
+    deep_sleep_duration:
+      name: "Deep Sleep Duration"
+      id: deep_sleep_duration
+      unit_of_measurement: "min"
+      icon: mdi:power-sleep
+
+    # Sleep analysis
+    average_respiration:
+      name: "Average Respiration Rate"
+      id: average_respiration
+      unit_of_measurement: "BPM"
+      accuracy_decimals: 1
+      icon: mdi:lungs
+    average_heart_rate:
+      name: "Average Heart Rate"
+      id: average_heart_rate
+      unit_of_measurement: "BPM"
+      accuracy_decimals: 1
+      icon: mdi:heart-pulse
+    turnover_count:
+      name: "Turnover Count"
+      id: turnover_count
+      icon: mdi:rotate-3d-variant
+    large_body_movement:
+      name: "Large Body Movement"
+      id: large_body_movement
+      unit_of_measurement: "%"
+      icon: mdi:human-handsup
+    minor_body_movement:
+      name: "Minor Body Movement"
+      id: minor_body_movement
+      unit_of_measurement: "%"
+      icon: mdi:human
+    apnea_events:
+      name: "Apnea Events"
+      id: apnea_events
+      icon: mdi:lungs-off
+
+# Binary sensors
+binary_sensor:
+  - platform: status
+    name: "Sleeper Connection Status"
+
+  - platform: c1001
+    c1001_id: c1001_component
+    # Presence detection (now inverted based on research)
+    person_detected:
+      name: "Person Detected"
+      id: person_detected
+      device_class: occupancy
+    
+    # Sleep alerts
+    abnormal_struggle:
+      name: "Abnormal Struggle"
+      id: abnormal_struggle
+      device_class: problem
+      icon: mdi:exclamation
+    sleep_disturbance:
+      name: "Sleep Disturbance"
+      id: sleep_disturbance
+      device_class: problem
+      icon: mdi:sleep-off
+
+# Create some template sensors to translate numeric values to human-readable states
+text_sensor:
+  - platform: template
+    name: "Sleep State Text"
+    icon: mdi:sleep
+    lambda: |-
+      if (id(sleep_state).has_state()) {
+        switch((int)id(sleep_state).state) {
+          case 0: return {"Deep Sleep"};
+          case 1: return {"Light Sleep"};
+          case 2: return {"Awake"};
+          case 3: return {"None"};
+          default: return {"Unknown"};
+        }
+      } else {
+        return {"Unknown"};
+      }
+      
+  - platform: template
+    name: "Sleep Quality Text"
+    icon: mdi:star
+    lambda: |-
+      if (id(sleep_quality_rating).has_state()) {
+        switch((int)id(sleep_quality_rating).state) {
+          case 0: return {"None"};
+          case 1: return {"Good"};
+          case 2: return {"Average"};
+          case 3: return {"Poor"};
+          default: return {"Unknown"};
+        }
+      } else {
+        return {"Unknown"};
+      }

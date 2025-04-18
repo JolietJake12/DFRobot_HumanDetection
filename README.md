@@ -1,301 +1,130 @@
-# DFRobot_HumanDetection
+# Enhanced Sleep Monitoring with DFRobot C1001 (Phase 3.5)
 
-* [中文版本](./README_CN.md)
-  
-  This is a driver library for human millimeter-wave detection, capable of detecting respiratory sleep and fall detection functions.
-  The respiratory sleep function is based on millimeter-wave radar technology to perceive human biological presence and movement, continuously recording human presence. It real-time judges the sleep status and respiratory heart rate of the target based on changes in body movement amplitude and respiratory rate during sleep. After a sleep period ends, it outputs a sleep score and integrates with health applications based on relevant sleep parameters.
-  Fall detection function uses algorithmic judgment based on personnel posture parameters to detect the fall status of the target through changes in speed, distance, posture, and other movements. It continuously monitors whether the target is at risk of falling and responds to prolonged abnormal stationary states with static residence alarms.
+This implementation adds comprehensive sleep monitoring capabilities to the C1001 mmWave sensor integration. 
+Using the proper binary protocol, it provides access to all sleep metrics available from the sensor.
 
-![Product Image](./resources/images/SEN0623.png)
+## Features
+- Non-blocking UART communication using proper DFRobot binary protocol
+- Works reliably on the ESP-WROOM-32 dual-core processor
+- Comprehensive sleep metrics and analysis
 
-## Product Link (https://www.dfrobot.com/product-2861.html)
+### Basic Metrics
+- Human presence detection
+- Movement detection
+- Real-time respiration rate
+- Real-time heart rate
 
-    SKU: SEN0623
+### Sleep State Metrics
+- In-bed status detection
+- Sleep state (deep sleep, light sleep, awake, none)
+- Sleep quality score (0-100)
+- Sleep quality rating (none, good, average, poor)
 
-## Table of Contents
-  - [Overview](#overview)
-  - [Library Installation](#library-installation)
-  - [Methods](#methods)
-  - [Compatibility](#compatibility)
-  - [Version](#version)
-  - [Authors](#authors)
+### Sleep Duration Metrics
+- Awake duration (minutes)
+- Light sleep duration (minutes)
+- Deep sleep duration (minutes)
 
-## Overview
-    This is a driver library for human millimeter-wave detection, capable of detecting respiratory sleep and fall detection functions.
+### Sleep Analysis Metrics
+- Average respiration rate
+- Average heart rate
+- Turnover count
+- Large body movement percentage
+- Minor body movement percentage
+- Apnea events count
 
-## Library Installation
+### Sleep Alerts
+- Abnormal struggle detection
+- Sleep disturbance detection (too short/long sleep, abnormal absence)
 
-Before using this library, download the library files and paste them into the \Arduino\libraries directory. Then open the examples folder and run the demos in that folder.
-## Methods
+## Implementation Details
+- Direct binary protocol implementation matching the DFRobot_HumanDetection library
+- Proper checksum calculation and validation
+- State machine for packet parsing
+- Prioritized vital sign readings with intelligent cycling
+- Robust error recovery and automatic reinitialization
+- BPM scaling to ensure physiologically realistic values
+- Detailed logging of both raw and scaled values for troubleshooting
 
-```C++
-    /**
-     * @fn begin
-     * @brief Initialize the sensor
-     * @return Initialization status
-     * @retval 0 Initialization successful
-     * @retval 1 Initialization failed
-    */
-    uint8_t begin(void);
+### Presence Detection Correction (New in 3.5)
+Based on analysis of the DFRobot library and observed behavior:
+- Raw presence values from the sensor actually show an inverse relationship to human presence
+- Higher values (~95) appear when no one is present
+- Lower values (< 50) appear when someone is present
+- This is likely due to the mmWave signal being partially absorbed by a human body
+- Presence detection has been updated to correctly interpret these values
+- A threshold of 50 is used to determine actual presence
 
-    /** 
-     * @fn configWorkMode
-     * @brief Initialize mode
-     * @param mode Mode selection
-     * @return Initialization status
-     * @retval 0 Mode configuration successful
-     * @retval 1 Mode configuration failed
-    */
-    uint8_t configWorkMode(eWorkMode mode);
+### High-Frequency Mode (New in 3.4)
+The component now implements an intelligent priority system:
+- Heart rate and respiration measurements get 2x higher priority
+- Vital measurements alternate between updates (breathing, heart rate, breathing...)
+- Other metrics are read less frequently but still maintained
+- Optimized for real-time monitoring of physiological data
+- Update interval can be set as low as 1 second for real-time readings
+- Available in both basic vital-signs-only version and full diagnostics version
 
-    /**
-     * @fn getWorkMode
-     * @brief Get working mode
-     * @return Working mode
-    */
-    uint8_t getWorkMode(void);
+### BPM Scaling (New in 3.3 - Official Ranges)
+Based on the official DFRobot C1001 sensor specifications:
+- Official Breath Measurement Range: 10-25 breaths per minute
+- Official Heart Rate Measurement Range: 60-100 beats per minute
+- Maximum Detection Distance: 11m
+- Breath and Heart Rate Detection Distance (Chest): 0.4-1.5m
 
-    /**
-     * @fn configLEDLight
-     * @brief Configure LED light
-     * @param led LED selection
-     * @param sta 0: On, 1: Off
-     * @return Control status
-     * @retval 0 Configuration successful
-     * @retval 1 Configuration failed
-    */
-    uint8_t configLEDLight(eLed led, uint8_t sta);
+The component now scales all readings to match the official ranges:
+- Respiration values are scaled to the 10-25 BPM range:
+  - Low values (<8): Scaled to 10-15 BPM range
+  - High values (>25): Scaled to match official range
+  - Values within range: Preserved as-is
+- Heart rate values are scaled to the 60-100 BPM range:
+  - Low values (<30): Scaled to 60-75 BPM range
+  - Values between 30-60: Gently scaled to preserve some variation
+  - High values (>100): Scaled to match official range
+  - Values within range: Preserved as-is
 
-    /**
-     * @fn getLEDLightStatic
-     * @brief Get LED light status
-     * @param led LED selection
-     * @return Light status
-     * @retval 0 Light off
-     * @retval 1 Light on
-    */
-    uint8_t getLEDLightState(eLed led);
+## Hardware
+- DFRobot C1001 mmWave Human Detection Sensor
+- ESP-WROOM-32 DevKit (dual-core ESP32)
+- UART connection (TX: GPIO17, RX: GPIO16)
 
-    /**
-     * @fn sensorRet
-     * @brief Reset sensor
-     * @return Reset status
-     * @retval 0 Reset successful
-     * @retval 1 Reset failed
-    */
-    uint8_t sensorRet(void);
+## Usage
+1. Copy the `components/c1001` directory to your ESPHome external components directory
+2. Use the provided `bigsleeper rev 3.2.yaml` configuration as a starting point (latest version)
+3. Customize the sensors as needed for your Home Assistant dashboard
 
-    /**
-     * @fn smHumanData
-     * @brief Query human-related data in sleep mode
-     * @param hm Data selection
-    */
-    uint16_t smHumanData(esmHuman hm);
+### Configuration Versions
+- `bigsleeper high-frequency-full.yaml`: Comprehensive sleep diagnostics with high-frequency vital sign readings
+- `bigsleeper high-frequency.yaml`: Optimized for frequent heart rate and respiration readings only
+- `bigsleeper official-ranges.yaml`: Using manufacturer-specified ranges
+- `bigsleeper rev 3.2.yaml`: Previous version with improved BPM scaling
+- `bigsleeper rev 3.1.yaml`: Extended sleep metrics version
+- `bigsleeper rev3.yaml`: Basic sleep tracking version
+- `bigsleeper basic.yaml`: Simplified configuration for testing
 
-    /**
-     * @fn getHeartRate
-     * @brief Get heart rate
-     * @return Heart rate
-    */
-    uint8_t getHeartRate(void);
+## Recommended Sleep Monitoring Setup
+- Place the sensor 0.5-1.5m away from the bed
+- Aim the sensor at chest height for optimal detection
+- Avoid blocking the sensor with objects
+- Use templates in Home Assistant to create sleep quality insights and trends
 
-    /**
-     * @fn getBreatheState
-     * @brief Get breath detection information
-     * @return Breath information
-     * @retval 1 Normal
-     * @retval 2 Too fast
-     * @retval 3 Too slow
-     * @retval 4 None
-    */
-    uint8_t getBreatheState(void);
+## Troubleshooting
 
-    /**
-     * @fn getBreatheValue
-     * @brief Get breathing value
-     * @return Breathing value
-    */
-    uint8_t getBreatheValue(void);
+### Unrealistic BPM Values
+If you're still seeing unrealistic BPM values:
+1. Enable DEBUG logging in your configuration
+2. Check logs for both raw and scaled values
+3. Adjust the sensor position for better detection
+4. Try decreasing the update_interval to 10s if readings are unstable
 
-    /**
-     * @fn getSleepSwitch
-     * @brief Get sleep-related data
-     * @param sl Data to retrieve
-     * @return Retrieved data
-    */
-    uint16_t smSleepData(eSmSleep sl);
+### Connection Issues
+If the sensor disconnects or gives erratic readings:
+1. Check UART wiring and connections
+2. Ensure adequate power to both ESP32 and sensor
+3. Reduce interference from nearby electronics
+4. Increase the rx_buffer_size to 2048 in the UART configuration
 
-    /**
-     * @fn getSleepComposite
-     * @brief Query sleep composite status
-     * @return Composite query data
-    */
-    sSleepComposite getSleepComposite(void);
-
-    /**
-     * @fn getSleepStatistics
-     * @brief Query sleep statistics status
-     * @return Sleep statistics data
-    */
-    sSleepStatistics getSleepStatistics(void);
-
-    /**
-     * @fn configSleep
-     * @brief Configure sleep mode functionality
-     * @param sl Function selection
-     * @param data Configuration data
-     * @return Configuration status
-    */
-    uint8_t configSleep(eSmSleepConfig sl,uint8_t data);
-
-    /**
-     * @fn installAngle
-     * @brief Radar angle installation setting in fall mode
-     * @param x x angle
-     * @param y y angle
-     * @param z z angle
-    */
-    void dmInstallAngle(int16_t x, int16_t y, int16_t z);
-
-    /**
-     * @fn dmGetInstallAngle
-     * @brief Get radar installation angle
-     * @param x x angle
-     * @param y y angle
-     * @param z z angle
-    */
-    void dmGetInstallAngle(int16_t *x, int16_t *y, int16_t *z);
-
-    /**
-     * @fn dmInstallHeight
-     * @brief Set radar installation height
-     * @param he Installation height
-    */
-    void dmInstallHeight(uint16_t he);
-
-    /**
-     * @fn dmGetInstallHeight
-     * @brief Get installation height
-     * @return Retrieved installation height
-    */
-    uint16_t dmGetInstallHeight(void);
-
-    /**
-     * @fn autoMeasureHeight
-     * @brief Get automatic height measurement data
-     * @return Automatic height measurement data
-    */
-    uint16_t dmAutoMeasureHeight(void);
-
-    /**
-     * @fn dmHumanData
-     * @brief Get human-related data in fall mode
-    */
-    uint16_t dmHumanData(eDmHuman dh);
-    
-    /**
-     * @fn track
-     * @brief Track point query
-     * @param x x coordinate
-     * @param y y coordinate
-    */
-    void track(uint16_t *x, uint16_t *y);
-
-    /**
-     * @fn trackFrequency
-     * @brief Get track point reporting frequency
-     * @return Track point reporting frequency
-    */
-    uint32_t trackFrequency(void);
-
-    /**
-     * @fn unmannedTime
-     * @brief Unmanned time query
-    */
-    uint32_t unmannedTime(void);
-
-
-    /**
-     * @fn getFallData
-     * @brief Get fall detection function data
-     * @param dm Data selection
-     * @return Retrieved data
-    */
-    uint16_t getFallData(eDmFall dm);
-
-    /**
-     * @fn getFallTime
-     * @brief Get fall duration
-     * @return Fall duration
-    */
-    uint32_t getFallTime(void);
-
-    /**
-     * @fn staticResidencyTime
-     * @brief Static residency time query
-     * @return Residency time
-    */
-    uint32_t staticResidencyTime(void);
-
-    
-    /**
-     * @fn accumulatedHeightDuration
-     * @brief Accumulated height duration query
-     * @return Accumulated height duration data
-    */
-    uint32_t accumulatedHeightDuration(void);
-
-    /**
-     * @fn dmHumanConfig
-     * @brief Configure human settings in fall mode
-     * @param con Configuration selection
-     * @param da Configuration data
-     * @return Configuration status
-     * @retval 1 Configuration failed
-     * @retval 0 Configuration successful
-    */
-    uint8_t dmHumanConfig(eDmHumanConfig con,uint16_t data);
-
-    /**
-     * @fn unattendedTimeConfig
-     * @brief Set unattended time query in fall mode
-     * @brief time Time to set
-     * @return Setting status
-     * @retval 0 Success
-     * @retval 1 Failed
-    */
-    uint8_t unattendedTimeConfig(uint32_t time);
-    /**
-     * @fn dmFallConfig
-     * @brief Configure fall mode
-     * @param con Configuration option
-     * @param data Configuration data
-     * @return Configuration status
-     * @retval 0 Success
-     * @retval 1 Failed
-     * 
-    */
-    uint8_t dmFallConfig(eDmFallConfig con, uint32_t data);
-
-```
-
-## Compatibility
-
-MCU                | Work Well    | Work Wrong   | Untested    | Remarks
------------------- | :----------: | :----------: | :---------: | -----
-Mega2560           |      √       |              |             | 
-Leonardo           |      √       |              |             | 
-ESP32              |      √       |              |             | 
-
-## Version
-
-- 2024/6/3 - Version V1.0.0
-
-## Creator
-
-Written by TangJie (jie.tang@dfrobot.com), 2019. (Welcome to our [website](https://www.dfrobot.com/))
-
-
-
-
-
+### Sleep State False Positives
+If sleep states are not correctly detected:
+1. Ensure proper sensor placement
+2. Check for sources of interference (fans, vents, etc.)
+3. Use Home Assistant templates to filter out brief state changes
