@@ -1,3 +1,9 @@
+Ended up exploring 2 paths on this guy. #1 is broke # 2 works I think.
+1.  Vibecoded my way into creating a custom library that's compatable with ESPHome. I got it to compile and, heart rate, resp rate and body movement parameter all look to be good, but the rest is non-sense (Component folder goes in your esphome folder and can upload bigsleeper high-frequency-full.yaml. Need more info from DF Robot, but no response yet. remains open
+2.  Went with Arduino code and MQTT to report it to Home Assistant as suggested elsewhere. Again, I vibe clauded into a working set up sleep_mqtt.ino and sleep_sensor.yaml. Picks up most vitals quickly. Will try to get a new night with it.
+
+Continued here it Claude's notes on the ESPHome attempt
+
 # Enhanced Sleep Monitoring with DFRobot C1001 (Phase 3.5)
 
 This implementation adds comprehensive sleep monitoring capabilities to the C1001 mmWave sensor integration. 
